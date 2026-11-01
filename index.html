@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Футбольные Карточки: Ultimate Duel</title>
-    <!-- Библиотека PeerJS для WebRTC (P2P) -->
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background: #f0f4f8; color: #1e293b; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow-x: hidden; }
         header { background: #ffffff; padding: 20px; text-align: center; font-size: 26px; font-weight: bold; color: #1e3a8a; border-bottom: 4px solid #3b82f6; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .container { display: flex; max-width: 1200px; margin: 25px auto; padding: 0 15px; gap: 25px; flex-wrap: wrap; }
 
-        .panel { background: #ffffff; border-radius: 16px; padding: 25px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        .panel { background: #ffffff; border-radius: 16px; padding: 25px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; position: relative; }
         #game-zone { flex: 2; min-width: 350px; text-align: center; }
         #side-zone { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 25px; }
 
@@ -29,12 +28,9 @@
         .btn-secondary:hover { background: #475569; }
         .btn-success { background: #10b981; box-shadow: 0 4px 12px rgba(16,185,129,0.2); }
         .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; box-shadow: 0 4px 12px rgba(239,68,68,0.2); }
+        .btn-danger:hover { background: #dc2626; }
 
-        .id-container { display: flex; gap: 8px; }
-        .id-container input { flex: 1; }
-        .id-container button { width: auto; margin-bottom: 0; padding: 12px 18px; }
-
-        #score-board { display: flex; justify-content: space-around; background: #1e3a8a; color: white; padding: 12px; border-radius: 10px; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
         #ground { width: 100%; height: 350px; background: radial-gradient(circle, #e6f4ea 0%, #c2e7d9 100%); border-radius: 12px; margin: 20px 0; position: relative; border: 2px dashed #94a3b8; overflow: hidden; perspective: 1000px; }
 
         #slider-container { width: 100%; background: #f1f5f9; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 15px; box-sizing: border-box; }
@@ -65,6 +61,10 @@
         .p2p-section { border-top: 1px dashed #cbd5e1; padding-top: 15px; margin-top: 15px; }
         .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background: #64748b; }
         .badge.online { background: #10b981; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; display: none; backdrop-filter: blur(4px); }
+        .modal-box { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); max-width: 400px; width: 90%; text-align: center; }
+        .score-board { display: flex; justify-content: space-around; margin-bottom: 15px; background: #f8fafc; padding: 10px; border-radius: 8px; font-weight: bold; border: 1px solid #e2e8f0; }
     </style>
 </head>
 <body>
@@ -72,16 +72,15 @@
     <header>⚽ СИМУЛЯТОР ВЫБИВАНИЯ КАРТОЧЕК ⚽</header>
 
     <div class="container">
-        <!-- Левая зона: Игровой стол -->
         <div class="panel" id="game-zone">
             <h2 style="margin-top:0; color:#1e3a8a; display: flex; justify-content: space-between; align-items: center;">
                 <span>Игровой стол</span>
                 <span id="turn-badge" class="badge">Режим не выбран</span>
             </h2>
 
-            <div id="score-board">
-                <div>Вы забрали: <span id="score-player">0</span> шт.</div>
-                <div>Оппонент забрал: <span id="score-opponent">0</span> шт.</div>
+            <div class="score-board">
+                <div style="color: #10b981;">Вы забрали: <span id="score-player">0</span> шт.</div>
+                <div style="color: #ef4444;">Оппонент забрал: <span id="score-opponent">0</span> шт.</div>
             </div>
 
             <div id="log"><div>Выберите тип игры на панели справа и нажмите «НАЧАТЬ МАТЧ»!</div></div>
@@ -98,9 +97,7 @@
             <button id="btn-hit" onclick="onHitButtonClick()" disabled>НАЧАТЬ ЗАМАХ ЛАДОНЬЮ!</button>
         </div>
 
-        <!-- Правая зона: Опции, коллекции и аккаунты -->
         <div id="side-zone">
-            <!-- Настройки матча и режимы -->
             <div class="panel">
                 <h3 style="margin-top:0; color:#3b82f6;">Параметры игры</h3>
 
@@ -123,42 +120,54 @@
                     <input type="number" id="input-stake" value="2" min="1" max="10">
                 </div>
 
-                <!-- Блок для P2P коннекта -->
                 <div id="p2p-controls" class="p2p-section" style="display: none;">
-                    <label>Ваш уникальный Игровой ID:</label>
-                    <div class="id-container">
+                    <label>Ваш постоянный Игровой ID:</label>
+                    <div style="display:flex; gap: 5px; margin-bottom: 10px;">
                         <input type="text" id="my-peer-id" readonly style="background: #e2e8f0; font-family: monospace; font-size: 13px;">
-                        <button class="btn-secondary" onclick="copyMyId()">Копировать</button>
+                        <button onclick="copyMyID()" style="width:auto; margin:0; padding:0 15px; background:#64748b;">📋</button>
                     </div>
 
-                    <label style="margin-top: 10px;">ID друга для подключения:</label>
-                    <div class="id-container">
-                        <input type="text" id="opponent-peer-id" placeholder="Вставьте fcards-XXXX...">
-                        <button class="btn-success" onclick="connectToOpponent()">Старт</button>
-                    </div>
+                    <label>ID друга для подключения:</label>
+                    <input type="text" id="opponent-peer-id" placeholder="fcards-1234" style="font-family: monospace;">
+
+                    <button onclick="sendDuelRequest()" style="margin-top:10px;">🔗 СТАРТ (Вызвать на дуэль)</button>
                 </div>
 
-                <button id="btn-start" onclick="startNewMatch()" style="margin-top:15px;">НАЧАТЬ МАТЧ</button>
+                <button id="btn-start" onclick="startNewMatch()" class="btn-success">🚀 НАЧАТЬ МАТЧ</button>
             </div>
 
-            <!-- Ваша коллекция -->
             <div class="panel">
-                <h3 style="margin-top:0; display:flex; justify-content:space-between; color:#1e3a8a;">
-                    <span>Ваша коллекция</span>
-                    <span id="inv-total" style="color:#10b981;">0 шт.</span>
-                </h3>
+                <h3 style="margin-top:0; color:#10b981;">Ваша коллекция <span id="inv-total" style="font-size:14px; color:#64748b;">0 шт.</span></h3>
                 <div id="inventory-grid"></div>
             </div>
 
-            <!-- Профиль и коллекция оппонента -->
             <div class="panel" id="opponent-profile-panel" style="display: none;">
-                <h3 style="margin-top:0; color:#ef4444; display: flex; justify-content: space-between; align-items: center;">
-                    <span id="opp-name-title">Аккаунт соперника</span>
-                    <span id="opp-inv-total" style="color:#64748b; font-size: 14px;">0 шт.</span>
-                </h3>
-                <p style="margin: -5px 0 10px 0; font-size: 12px; color: #94a3b8;" id="opp-id-label">ID: неизвестен</p>
+                <h3 style="margin-top:0; color:#ef4444;">Аккаунт соперника</h3>
+                <div id="opp-name-title" style="font-weight:bold; color:#1e293b;">—</div>
+                <div id="opp-uid-label" style="font-size:12px; color:#64748b; margin-bottom:5px;">ID: неизвестен</div>
+                <div id="opp-inv-total" style="font-size:13px; font-weight:bold; color:#10b981;">0 шт.</div>
                 <div id="opponent-inventory-grid"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно входящего вызова -->
+    <div class="modal-overlay" id="modal-incoming">
+        <div class="modal-box">
+            <h2 style="color:#ef4444; margin-top:0;">🚨 ВАС ВЫЗЫВАЮТ НА ДУЭЛЬ!</h2>
+            <p>Игрок <b id="incoming-name">Оппонент</b> предлагает сыграть матч на карты.</p>
+            <p>Ставка в матче: <b id="incoming-stake">2</b> карт.</p>
+            <button class="btn-success" onclick="acceptDuel()">Принять вызов 👍</button>
+            <button class="btn-danger" onclick="rejectDuel()">Отклонить 👎</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно ожидания -->
+    <div class="modal-overlay" id="modal-waiting">
+        <div class="modal-box">
+            <h2 style="margin-top:0;">⏳ Вызов отправлен</h2>
+            <p>Ожидание ответа от оппонента...</p>
+            <button class="btn-secondary" onclick="cancelWaiting()">Отмена</button>
         </div>
     </div>
 
@@ -178,53 +187,46 @@ const футболисты = [
 ];
 
 let мойИнвентарь = {};
-let ботИнвентарь = {};
+let инвентарьБота = {};
 let карточкиНаКону = [];
 let arrowPosition = 0;
 let arrowDirection = 1;
 let arrowInterval = null;
 let isAiming = false;
 
-let currentMode = 'training'; 
-let currentTurn = 'player'; 
+let currentMode = 'training';
+let currentTurn = 'player';
 let isHost = true;
-let mySavedId = "";
+let scorePlayer = 0;
+let scoreOpponent = 0;
 
-let pScore = 0;
-let oScore = 0;
-
-// Веб-сокет / WebRTC переменные
+let myAccountID = "";
 let peer = null;
 let conn = null;
 
-function инициализацияКоллекции() {
-    // Генерация или получение постоянного уникального ID из LocalStorage
+function initGame() {
     if (!localStorage.getItem('fcards_user_id')) {
-        let randSfx = Math.floor(1000 + Math.random() * 9000);
-        mySavedId = `fcards-${randSfx}`;
-        localStorage.setItem('fcards_user_id', mySavedId);
-    } else {
-        mySavedId = localStorage.getItem('fcards_user_id');
+        let randId = 'fcards-' + Math.floor(1000 + Math.random() * 9000);
+        localStorage.setItem('fcards_user_id', randId);
     }
+    myAccountID = localStorage.getItem('fcards_user_id');
+    document.getElementById('player-nickname').value = "Игрок_" + myAccountID.split('-')[1];
 
-    document.getElementById('my-peer-id').value = mySavedId;
-    document.getElementById('player-nickname').value = "Игрок_" + mySavedId.split('-')[1];
-
-    // Выдача стартовых карт
-    for(let i = 0; i < 10; i++) {
+    for (let i = 0; i < 10; i++) {
         let случайный = футболисты[Math.floor(Math.random() * футболисты.length)];
-        добавитьВИнвентарь(случайный);
+        добавитьВИнвентарь(случайный, мойИнвентарь);
     }
     обновитьИнвентарьИнтерфейс();
     toggleModeUI();
     initPeer();
+    animateArrow();
 }
 
-function добавитьВИнвентарь(карта) {
-    if(мойИнвентарь[карта.name]) {
-        мойИнвентарь[карта.name].count++;
+function добавитьВИнвентарь(карта, инв) {
+    if (инв[карта.name]) {
+        инв[карта.name].count++;
     } else {
-        мойИнвентарь[карта.name] = { ...карта, count: 1 };
+        инв[карта.name] = { ...карта, count: 1 };
     }
 }
 
@@ -234,16 +236,11 @@ function обновитьИнвентарьИнтерфейс() {
     let всего = 0;
 
     Object.values(мойИнвентарь).forEach(карта => {
-        if(карта.count <= 0) return;
+        if (карта.count <= 0) return;
         всего += карта.count;
-
         let slot = document.createElement('div');
         slot.className = `inv-slot ${карта.rare}`;
-        slot.innerHTML = `
-            <div class="inv-count">${карта.count}</div>
-            <strong style="font-size:14px;">${карта.rating}</strong>
-            <div class="card-name">${карта.name}</div>
-        `;
+        slot.innerHTML = `<div class="inv-count">${карта.count}</div><strong style="font-size:14px;">${карта.rating}</strong><div class="card-name">${карта.name}</div>`;
         grid.appendChild(slot);
     });
     document.getElementById('inv-total').innerText = `${всего} шт.`;
@@ -252,26 +249,22 @@ function обновитьИнвентарьИнтерфейс() {
 function отобразитьКоллекциюСоперника(nickname, uid, inventory) {
     const panel = document.getElementById('opponent-profile-panel');
     const title = document.getElementById('opp-name-title');
-    const idLabel = document.getElementById('opp-id-label');
     const totalCount = document.getElementById('opp-inv-total');
     const grid = document.getElementById('opponent-inventory-grid');
+    const uidLabel = document.getElementById('opp-uid-label');
 
     panel.style.display = 'block';
     title.innerText = nickname;
-    idLabel.innerText = `ID: ${uid}`;
+    uidLabel.innerText = "ID: " + uid;
     grid.innerHTML = '';
 
     let всего = 0;
     Object.values(inventory).forEach(карта => {
-        if(карта.count <= 0) return;
+        if (карта.count <= 0) return;
         всего += карта.count;
         let slot = document.createElement('div');
         slot.className = `inv-slot ${карта.rare}`;
-        slot.innerHTML = `
-            <div class="inv-count">${карта.count}</div>
-            <strong style="font-size:13px;">${карта.rating}</strong>
-            <div class="card-name">${карта.name}</div>
-        `;
+        slot.innerHTML = `<div class="inv-count">${карта.count}</div><strong style="font-size:13px;">${карта.rating}</strong><div class="card-name">${карта.name}</div>`;
         grid.appendChild(slot);
     });
     totalCount.innerText = `${всего} шт.`;
@@ -281,14 +274,7 @@ function printLog(msg) {
     const log = document.getElementById('log');
     let div = document.createElement('div');
     div.innerHTML = msg;
-    log.appendChild(div);
-}
-
-function copyMyId() {
-    const myIdInput = document.getElementById('my-peer-id');
-    myIdInput.select();
-    document.execCommand('copy');
-    alert("Ваш постоянный Игровой ID скопирован: " + myIdInput.value);
+    log.prepend(div);
 }
 
 function toggleModeUI() {
@@ -304,135 +290,141 @@ function toggleModeUI() {
     } else if (currentMode === 'bot-stake') {
         stakeGroup.style.display = 'block';
         p2pControls.style.display = 'none';
-
-        // Генерируем фиксированную коллекцию бота
-        ботИнвентарь = {};
-        for(let i=0; i<8; i++){
-            let c = футболисты[Math.floor(Math.random()*футболисты.length)];
-            if(ботИнвентарь[c.name]) ботИнвентарь[c.name].count++;
-            else ботИнвентарь[c.name] = {...c, count: 1};
+        инвентарьБота = {};
+        for (let i = 0; i < 8; i++) {
+            let c = футболисты[Math.floor(Math.random() * футболисты.length)];
+            добавитьВИнвентарь(c, инвентарьБота);
         }
-        отобразитьКоллекциюСоперника("Робот-Спарринг", "fcards-bot99", ботИнвентарь);
+        отобразитьКоллекциюСоперника("Робот-Футболист", "fcards-bot99", инвентарьБота);
     } else if (currentMode === 'pvp-local') {
         stakeGroup.style.display = 'block';
         p2pControls.style.display = 'block';
-        oppPanel.style.display = 'none';
+        oppPanel.style.display = 'block';
     }
 }
 
-// --- СЕТЕВОЙ ДВИЖОК WebRTC (PeerJS) ---
-function initPeer() {
-    peer = new Peer(mySavedId, {
-        host: '0.peerjs.com',
-        port: 443,
-        secure: true
-    });
+function copyMyID() {
+    const idInput = document.getElementById('my-peer-id');
+    idInput.select();
+    document.execCommand('copy');
+    alert("Ваш сетевой ID скопирован!");
+}
 
+// --- WEBRTC ---
+function initPeer() {
+    peer = new Peer(myAccountID, { host: 'peerjs.com', port: 443, secure: true });
+    peer.on('open', (id) => {
+        document.getElementById('my-peer-id').value = id;
+    });
     peer.on('error', (err) => {
-        if(err.type === 'unavailable-id') {
-            // Если ID вдруг занят, добавляем случайный суффикс
-            let altId = mySavedId + "-" + Math.floor(Math.random()*100);
-            peer = new Peer(altId, { host: '0.peerjs.com', port: 443, secure: true });
+        if (err.type === 'unavailable-id') {
+            let altId = myAccountID + '-' + Math.floor(Math.random() * 100);
+            peer = new Peer(altId, { host: 'peerjs.com', port: 443, secure: true });
+            peer.on('open', id => { document.getElementById('my-peer-id').value = id; });
+        } else {
+            printLog("⚠ Ошибка сети: " + err.type);
         }
     });
-
     peer.on('connection', (connection) => {
         conn = connection;
-        isHost = false; 
-        setupConnectionListeners();
-        printLog("📥 К вам подключился сетевой соперник! Синхронизируем аккаунты...");
-        sendNetworkData({ 
-            type: 'profile', 
-            nickname: document.getElementById('player-nickname').value, 
-            uid: mySavedId, 
-            inventory: мойИнвентарь 
-        });
+        isHost = false;
+        setupP2PConnection();
     });
 }
 
-function connectToOpponent() {
+function sendDuelRequest() {
     let targetId = document.getElementById('opponent-peer-id').value.trim();
-    if(!targetId) return alert("Введите ID друга!");
-
-    printLog("⏳ Поиск игрока в локальной/глобальной сети...");
+    if (!targetId) return alert("Вставьте ID друга для отправки вызова!");
+    if (targetId === myAccountID) return alert("Нельзя вызвать самого себя!");
+    document.getElementById('modal-waiting').style.display = 'flex';
     conn = peer.connect(targetId);
-    isHost = true; 
-    setupConnectionListeners();
+    isHost = true;
+    setupP2PConnection();
 }
 
-function setupConnectionListeners() {
+function setupP2PConnection() {
     conn.on('open', () => {
-        printLog("💚 Успешное P2P-подключение к сопернику по ID!");
-        document.getElementById('game-mode').value = 'pvp-local';
-        toggleModeUI();
-        sendNetworkData({ 
-            type: 'profile', 
-            nickname: document.getElementById('player-nickname').value, 
-            uid: mySavedId, 
-            inventory: мойИнвентарь 
-        });
+        if (isHost) {
+            sendNetworkData({
+                type: 'duel-request',
+                nickname: document.getElementById('player-nickname').value,
+                uid: myAccountID,
+                stake: parseInt(document.getElementById('input-stake').value) || 2
+            });
+        }
     });
-
-    conn.on('data', (data) => {
-        handleNetworkMessage(data);
-    });
-
+    conn.on('data', (data) => handleIncomingData(data));
     conn.on('close', () => {
-        printLog("❌ Сетевой игрок отключился от матча.");
+        printLog("❌ Сетевое соединение разорвано.");
         document.getElementById('btn-start').disabled = false;
-        document.getElementById('turn-badge').innerText = "Дисконнект";
+        document.getElementById('turn-badge').innerText = "Отключен";
     });
 }
 
 function sendNetworkData(obj) {
-    if (conn && conn.open) {
-        conn.send(obj);
-    }
+    if (conn && conn.open) conn.send(obj);
 }
 
 function updateProfileData() {
-    if(currentMode === 'pvp-local') {
-        sendNetworkData({ 
-            type: 'profile', 
-            nickname: document.getElementById('player-nickname').value, 
-            uid: mySavedId, 
-            inventory: мойИнвентарь 
+    if (currentMode === 'pvp-local') {
+        sendNetworkData({
+            type: 'profile-sync',
+            nickname: document.getElementById('player-nickname').value,
+            uid: myAccountID,
+            inventory: мойИнвентарь
         });
     }
 }
 
-function handleNetworkMessage(data) {
+function handleIncomingData(data) {
     switch (data.type) {
-        case 'profile':
+        case 'duel-request':
+            document.getElementById('incoming-name').innerText = data.nickname;
+            document.getElementById('incoming-stake').innerText = data.stake;
+            document.getElementById('input-stake').value = data.stake;
+            document.getElementById('modal-incoming').style.display = 'flex';
+            break;
+        case 'duel-response':
+            document.getElementById('modal-waiting').style.display = 'none';
+            if (data.accepted) {
+                printLog("💚 Вызов принят!");
+                document.getElementById('game-mode').value = 'pvp-local';
+                toggleModeUI();
+                sendNetworkData({
+                    type: 'profile-sync',
+                    nickname: document.getElementById('player-nickname').value,
+                    uid: myAccountID,
+                    inventory: мойИнвентарь
+                });
+            } else {
+                printLog("👎 Оппонент отклонил вызов.");
+                if (conn) conn.close();
+            }
+            break;
+        case 'profile-sync':
             отобразитьКоллекциюСоперника(data.nickname, data.uid, data.inventory);
-            printLog(`👤 Синхронизирован аккаунт оппонента: <b>${data.nickname}</b>.`);
             break;
         case 'start-match':
             карточкиНаКону = data.cards;
-            currentTurn = data.firstTurn; // Принимаем брошенный хостом жребий
-            document.getElementById('input-stake').value = data.stake;
+            currentTurn = data.firstTurn === 'host' ? (isHost ? 'player' : 'opponent') : (isHost ? 'opponent' : 'player');
             снятьКартыЗаСтавкуСети(data.stake);
-
-            pScore = 0; oScore = 0;
+            scorePlayer = 0;
+            scoreOpponent = 0;
             updateScoreBoard();
-
             отрисоватьСтопку();
             обновитьЗначокХода();
             document.getElementById('btn-start').disabled = true;
-
-            if(currentTurn === 'player') {
-                printLog(`🎲 Жребий определил: Вы бьёте первым! Нажмите кнопку замаха.`);
+            isAiming = false;
+            if (currentTurn === 'player') {
                 document.getElementById('btn-hit').disabled = false;
                 document.getElementById('btn-hit').innerText = "НАЧАТЬ ЗАМАХ ЛАДОНЬЮ!";
             } else {
-                printLog(`🎲 Жребий определил: Первый ход за соперником! Ожидайте...`);
+                document.getElementById('btn-hit').innerText = "Ходит соперник...";
                 document.getElementById('btn-hit').disabled = true;
-                document.getElementById('btn-hit').innerText = "Соперник замахивается...";
             }
             break;
-        case 'remote-aim-start':
-            // Запуск визуальной симуляции движения стрелки соперника
-            visualizeRemoteAim();
+        case 'animate-remote-bar':
+            запуститьСетевуюАнимациюШкалы(data.arrowPos);
             break;
         case 'hit-result':
             применитьШлепокСети(data.chance, data.arrowPos);
@@ -440,12 +432,35 @@ function handleNetworkMessage(data) {
     }
 }
 
+function acceptDuel() {
+    document.getElementById('modal-incoming').style.display = 'none';
+    sendNetworkData({ type: 'duel-response', accepted: true });
+    sendNetworkData({
+        type: 'profile-sync',
+        nickname: document.getElementById('player-nickname').value,
+        uid: myAccountID,
+        inventory: мойИнвентарь
+    });
+    printLog("💚 Вы приняли дуэль. Ожидание запуска матча хостом.");
+}
+
+function rejectDuel() {
+    document.getElementById('modal-incoming').style.display = 'none';
+    sendNetworkData({ type: 'duel-response', accepted: false });
+    if (conn) conn.close();
+}
+
+function cancelWaiting() {
+    document.getElementById('modal-waiting').style.display = 'none';
+    if (conn) conn.close();
+}
+
 function снятьКартыЗаСтавкуСети(ставка) {
     let забрано = 0;
     let keys = Object.keys(мойИнвентарь);
-    for(let i = 0; i < keys.length; i++) {
+    for (let i = 0; i < keys.length && забрано < ставка; i++) {
         let key = keys[i];
-        while(мойИнвентарь[key].count > 0 && забрано < ставка) {
+        while (мойИнвентарь[key] && мойИнвентарь[key].count > 0 && забрано < ставка) {
             мойИнвентарь[key].count--;
             забрано++;
         }
@@ -453,371 +468,107 @@ function снятьКартыЗаСтавкуСети(ставка) {
     обновитьИнвентарьИнтерфейс();
 }
 
-function updateScoreBoard() {
-    document.getElementById('score-player').innerText = pScore;
-    document.getElementById('score-opponent').innerText = oScore;
-}
-
-// --- ИГРОВОЙ ПРОЦЕСС ---
+// --- ИГРОВАЯ ЛОГИКА ---
 function startNewMatch() {
     const stakeInput = document.getElementById('input-stake');
-    let ставка = currentMode === 'training' ? 0 : parseInt(stakeInput.value);
+    let ставка = currentMode === 'training' ? 0 : parseInt(stakeInput.value) || 2;
 
     let сколькоКартИмеетИгрок = Object.values(мойИнвентарь).reduce((a, b) => a + b.count, 0);
-    if(currentMode !== 'training' && сколькоКартИмеетИгрок < ставка) {
-        alert(`Недостаточно карт для ставки! У вас в наличии всего: ${сколькоКартИмеетИгрок}`);
+    if (currentMode !== 'training' && сколькоКартИмеетИгрок < ставка) {
+        alert(`Недостаточно карт! У вас всего: ${сколькоКартИмеетИгрок}`);
         return;
     }
-
     if (currentMode === 'pvp-local') {
-        if(!conn || !conn.open) return alert("Нет активного P2P подключения к игроку!");
-        if(!isHost) return alert("Ожидайте запуска матча от создателя комнаты (Хоста)!");
+        if (!conn || !conn.open) return alert("Ошибка: соединение не установлено!");
+        if (!isHost) return alert("Ждите, пока хост запустит матч.");
     }
 
     карточкиНаКону = [];
-    pScore = 0; oScore = 0;
+    scorePlayer = 0;
+    scoreOpponent = 0;
     updateScoreBoard();
 
-    const ground = document.getElementById('ground');
-    ground.innerHTML = '';
+    let coinFlip = Math.random() < 0.5;
 
-    // 🎲 Рандомный жребий первого хода
-    let жребий = Math.random() < 0.5 ? 'player' : 'opponent';
-    currentTurn = жребий;
-
-    if (currentMode === 'training') {
-        printLog(`🎮 Режим тренировки! Бесконечные 4 карты на кону.`);
-        for(let i=0; i<4; i++) {
+    if (currentMode === 'training' || currentMode === 'bot-stake') {
+        currentTurn = coinFlip ? 'player' : 'opponent';
+        printLog(`🎲 Жребий брошен! Первым бьёт: <b>${currentTurn === 'player' ? 'Вы' : 'Бот'}</b>`);
+        let общКол = (currentMode === 'training') ? 4 : ставка * 2;
+        for (let i = 0; i < общКол; i++) {
             let случайный = футболисты[Math.floor(Math.random() * футболисты.length)];
             карточкиНаКону.push({ ...случайный, flipped: false });
         }
-    } else if (currentMode === 'bot-stake') {
-        printLog(`🔹 Вы собрали общую стопку карт. Ставка: по ${ставка} шт. Всего на кону: ${ставка * 2} шт.`);
-        let забрано = 0;
-        let keys = Object.keys(мойИнвентарь);
-        for(let i = 0; i < keys.length; i++) {
-            let key = keys[i];
-            while(мойИнвентарь[key].count > 0 && забрано < ставка) {
-                мойИнвентарь[key].count--;
-                карточкиНаКону.push({ ...мойИнвентарь[key], count: 1, flipped: false });
-                забрано++;
-            }
-        }
-        обновитьИнвентарьИнтерфейс();
-
-        for(let i = 0; i < ставка; i++) {
-            let случайныйВраг = футболисты[Math.floor(Math.random() * футболисты.length)];
-            карточкиНаКону.push({ ...случайныйВраг, flipped: false });
-        }
+        if (currentMode === 'bot-stake') снятьКартыЗаСтавкуСети(ставка);
     } else if (currentMode === 'pvp-local' && isHost) {
-        // Формирование стопки хостом из своих карт и случайных карт соперника
-        let забрано = 0;
-        let keys = Object.keys(мойИнвентарь);
-        for(let i = 0; i < keys.length; i++) {
-            let key = keys[i];
-            while(мойИнвентарь[key].count > 0 && забрано < ставка) {
-                мойИнвентарь[key].count--;
-                карточкиНаКону.push({ ...мойИнвентарь[key], count: 1, flipped: false });
-                забрано++;
-            }
+        for (let i = 0; i < ставка * 2; i++) {
+            let случайный = футболисты[Math.floor(Math.random() * футболисты.length)];
+            карточкиНаКону.push({ ...случайный, flipped: false });
         }
-        обновитьИнвентарьИнтерфейс();
-
-        for(let i = 0; i < ставка; i++) {
-            let случайная = футболисты[Math.floor(Math.random() * футболисты.length)];
-            карточкиНаКону.push({ ...случайная, flipped: false });
-        }
-
-        // Отсылаем настройки и жребий клиенту
-        sendNetworkData({ 
-            type: 'start-match', 
-            cards: карточкиНаКону, 
-            stake: ставка,
-            firstTurn: currentTurn 
-        });
+        let ктоПервый = coinFlip ? 'host' : 'client';
+        currentTurn = coinFlip ? 'player' : 'opponent';
+        printLog(`🎲 Жребий: первый ход за <b>${currentTurn === 'player' ? 'Вами' : 'Оппонентом'}</b>`);
+        снятьКартыЗаСтавкуСети(ставка);
+        sendNetworkData({ type: 'start-match', cards: карточкиНаКону, stake: ставка, firstTurn: ктоПервый });
     }
 
     отрисоватьСтопку();
     обновитьЗначокХода();
     document.getElementById('btn-start').disabled = true;
+    isAiming = false;
 
     if (currentTurn === 'player') {
-        printLog(`🎲 Жребий брошен! Первым ходите Вы.`);
         document.getElementById('btn-hit').disabled = false;
         document.getElementById('btn-hit').innerText = "НАЧАТЬ ЗАМАХ ЛАДОНЬЮ!";
     } else {
-        printLog(`🎲 Жребий определил: Первый ход за соперником!`);
         document.getElementById('btn-hit').disabled = true;
-        if (currentMode.includes('bot')) {
-            setTimeout(ходБота, 600);
-        } else {
-            document.getElementById('btn-hit').innerText = "Соперник замахивается...";
-        }
+        document.getElementById('btn-hit').innerText = "Ходит соперник...";
+        if (currentMode.includes('bot')) setTimeout(ходБота, 800);
     }
-    isAiming = false;
+}
+
+function updateScoreBoard() {
+    document.getElementById('score-player').innerText = scorePlayer;
+    document.getElementById('score-opponent').innerText = scoreOpponent;
+}
+
+function обновитьЗначокХода() {
+    const badge = document.getElementById('turn-badge');
+    if (карточкиНаКону.length === 0) {
+        badge.innerText = "Матч завершён";
+        badge.className = "badge";
+        return;
+    }
+    if (currentTurn === 'player') {
+        badge.innerText = "Ваш ход";
+        badge.className = "badge online";
+    } else {
+        badge.innerText = "Ход соперника";
+        badge.className = "badge";
+    }
 }
 
 function отрисоватьСтопку() {
     const ground = document.getElementById('ground');
     ground.innerHTML = '';
+    if (карточкиНаКону.length === 0) return;
 
-    let visualIndex = 0;
-    карточкиНаКону.forEach((карта, index) => {
-        if (карта.flipped) return;
-
-        let cEl = document.createElement('div');
-        cEl.className = 'card-3d';
-        cEl.id = `match-card-${index}`;
-
-        cEl.style.top = `calc(50% - 67.5px)`;
-        cEl.style.left = `calc(50% - 47.5px)`;
-        cEl.style.transform = `translateZ(${visualIndex * 2}px) rotateY(180deg)`;
-
-        cEl.innerHTML = `
-            <div class="card-face card-front rare-${карта.rare}">
-                <div class="card-rating">${карта.rating}</div>
-                <div class="card-name">${карта.name}</div>
-                <div class="card-sign">✍️ ${карта.sign}</div>
-            </div>
-            <div class="card-face card-back">⚽</div>
-        `;
-        ground.appendChild(cEl);
-        visualIndex++;
-    });
+    let card = карточкиНаКону[карточкиНаКону.length - 1];
+    let cardEl = document.createElement('div');
+    cardEl.className = 'card-3d';
+    cardEl.innerHTML = `
+        <div class="card-face card-front rare-${card.rare}" style="transform: rotateY(${card.flipped ? 0 : 180}deg);">
+            <div class="card-rating">${card.rating}</div>
+            <div class="card-name">${card.name}</div>
+            <div class="card-sign">${card.sign}</div>
+        </div>
+        <div class="card-face card-back" style="transform: rotateY(${card.flipped ? 180 : 0}deg);">⚽</div>
+    `;
+    ground.appendChild(cardEl);
 }
 
-function обновитьЗначокХода() {
-    const badge = document.getElementById('turn-badge');
-    if (currentTurn === 'player') {
-        badge.innerText = "Ваш ход";
-        badge.className = "badge online";
-    } else {
-        badge.innerText = "Ход оппонента";
-        badge.className = "badge";
-    }
-}
-
-function onHitButtonClick() {
-    const btn = document.getElementById('btn-hit');
-    if (!isAiming) {
-        isAiming = true;
-        btn.innerText = "ХЛОПНУТЬ СЕЙЧАС!";
-        btn.style.background = "#eab308";
-
-        if (currentMode === 'pvp-local') {
-            sendNetworkData({ type: 'remote-aim-start' });
-        }
-
-        startArrowMovement();
-    } else {
-        isAiming = false;
-        btn.disabled = true;
-        btn.style.background = "#3b82f6";
-        btn.innerText = "УДАР НАНЕСЕН!";
-        stopArrowAndHit();
-    }
-}
-
-function startArrowMovement() {
-    const arrow = document.getElementById('arrow');
-    arrowPosition = 0;
-    arrowDirection = 1;
-
+function animateArrow() {
+    if (arrowInterval) clearInterval(arrowInterval);
     arrowInterval = setInterval(() => {
-        arrowPosition += 4.5 * arrowDirection;
-        if (arrowPosition >= 100) { arrowPosition = 100; arrowDirection = -1; }
-        if (arrowPosition <= 0) { arrowPosition = 0; arrowDirection = 1; }
-        arrow.style.left = arrowPosition + "%";
-    }, 15);
-}
-
-function stopArrowAndHit() {
-    clearInterval(arrowInterval);
-
-    let chance = 0.15;
-    let zoneColor = "КРАСНУЮ (Края)";
-
-    if (arrowPosition >= 15 && arrowPosition < 35 || arrowPosition > 65 && arrowPosition <= 85) {
-        chance = 0.40;
-        zoneColor = "ОРАНЖЕВУЮ зону";
-    } else if (arrowPosition >= 35 && arrowPosition < 45 || arrowPosition > 55 && arrowPosition <= 65) {
-        chance = 0.70;
-        zoneColor = "ЖЁЛТУЮ зону";
-    } else if (arrowPosition >= 45 && arrowPosition <= 55) {
-        chance = 0.95;
-        zoneColor = "✨ЗЕЛЁНУЮ ЗОНУ (Идеал!)✨";
-    }
-
-    printLog(`🎯 Вы попали в ${zoneColor} (${Math.round(arrowPosition)}%)!`);
-
-    if (currentMode === 'pvp-local') {
-        sendNetworkData({ type: 'hit-result', chance: chance, arrowPos: arrowPosition });
-    }
-
-    выполнитьШлепок(chance);
-}
-
-function visualizeRemoteAim() {
-    const arrow = document.getElementById('arrow');
-    let localPos = 0;
-    let localDir = 1;
-
-    document.getElementById('btn-hit').innerText = "Соперник целится...";
-
-    arrowInterval = setInterval(() => {
-        localPos += 6.0 * localDir;
-        if (localPos >= 100) { localPos = 100; localDir = -1; }
-        if (localPos <= 0) { localPos = 0; localDir = 1; }
-        arrow.style.left = localPos + "%";
-    }, 15);
-}
-
-function применитьШлепокСети(chance, arrowPos) {
-    clearInterval(arrowInterval);
-    const arrow = document.getElementById('arrow');
-    arrow.style.left = arrowPos + "%";
-
-    let zone = "КРАСНУЮ";
-    if (arrowPos >= 15 && arrowPos < 35 || arrowPos > 65 && arrowPos <= 85) zone = "ОРАНЖЕВУЮ";
-    else if (arrowPos >= 35 && arrowPos < 45 || arrowPos > 55 && arrowPos <= 65) zone = "ЖЁЛТУЮ";
-    else if (arrowPos >= 45 && arrowPos <= 55) zone = "✨ЗЕЛЁНУЮ✨";
-
-    printLog(`🎯 Соперник завершил шлепок: попадание в ${zone} зону (${Math.round(arrowPos)}%)!`);
-    выполнитьШлепок(chance);
-}
-
-function выполнитьШлепок(шансВыбивания) {
-    let выбитоЗаХод = 0;
-    document.getElementById('btn-hit').disabled = true;
-
-    карточкиНаКону.forEach((карта, index) => {
-        if (карта.flipped) return;
-
-        let cEl = document.getElementById(`match-card-${index}`);
-        if (!cEl) return;
-
-        let randomX = (Math.random() - 0.5) * 240; 
-        let randomY = (Math.random() - 0.5) * 160; 
-
-        let перевернулась = Math.random() < шансВыбивания;
-        let finalRotateY = перевернулась ? 0 : 180; 
-        let randomSpin = (Math.random() - 0.5) * 120; 
-
-        cEl.style.transition = "all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
-        cEl.style.top = `calc(50% - 65px + ${randomY}px)`; 
-        cEl.style.left = `calc(50% - 45px + ${randomX}px)`;
-        cEl.style.transform = `translateZ(120px) rotateX(${randomSpin}deg) rotateY(${finalRotateY + 360}deg)`;
-
-        setTimeout(() => {
-            cEl.style.transition = "all 0.2s ease-in";
-            cEl.style.transform = `translateZ(0px) rotateX(0deg) rotateY(${finalRotateY}deg)`;
-
-            if(finalRotateY === 0) {
-                карта.flipped = true;
-                выбитоЗаХод++;
-
-                if (currentTurn === 'player') {
-                    pScore++;
-                    if (currentMode !== 'training') добавитьВИнвентарь(карта);
-                    cEl.style.boxShadow = '0 0 20px #10b981';
-                } else {
-                    oScore++;
-                    cEl.style.boxShadow = '0 0 20px #ef4444';
-                }
-                setTimeout(() => cEl.style.opacity = '0', 800);
-            }
-        }, 300);
-    });
-
-    setTimeout(() => {
-        updateScoreBoard();
-        if (currentTurn === 'player') {
-            printLog(`🏆 Вы перевернули карточек: <b>${выбитоЗаХод} шт.</b>`);
-            обновитьИнвентарьИнтерфейс();
-            updateProfileData();
-        } else {
-            printLog(`👤 Оппонент перевернул карточек: <b>${выбитоЗаХод} шт.</b>`);
-        }
-
-        let картОсталось = карточкиНаКону.filter(c => !c.flipped).length;
-
-        if (картОсталось === 0) {
-            printLog("🎉 Все карточки на столе выбиты! Дуэль завершена.");
-            завершитьМатч();
-        } else {
-            // Передача очереди хода
-            currentTurn = (currentTurn === 'player') ? 'opponent' : 'player';
-
-            setTimeout(() => {
-                отрисоватьСтопку();
-                обновитьЗначокХода();
-
-                if (currentTurn === 'opponent') {
-                    if (currentMode.includes('bot')) {
-                        ходБота();
-                    } else {
-                        document.getElementById('btn-hit').innerText = "Соперник замахивается...";
-                    }
-                } else {
-                    document.getElementById('btn-hit').disabled = false;
-                    document.getElementById('btn-hit').innerText = "НАЧАТЬ ЗАМАХ ЛАДОНЬЮ!";
-                }
-            }, 1000);
-        }
-    }, 700);
-}
-
-function ходБота() {
-    document.getElementById('btn-hit').innerText = "Робот целится...";
-    printLog("⏳ Бот рассчитывает траекторию замаха...");
-
-    // Анимация замаха бота на шкале игрока
-    const arrow = document.getElementById('arrow');
-    let bPos = 0;
-    let bDir = 1;
-    let ticks = 0;
-
-    let botAimInterval = setInterval(() => {
-        bPos += 7 * bDir;
-        if (bPos >= 100) { bPos = 100; bDir = -1; }
-        if (bPos <= 0) { bPos = 0; bDir = 1; }
-        arrow.style.left = bPos + "%";
-        ticks++;
-
-        // Робот "принимает решение" хлопнуть через 20 тиков (~300мс)
-        if(ticks >= 20) {
-            clearInterval(botAimInterval);
-
-            let рандомИИ = Math.random();
-            let шансИИ = 0.15;
-            let finalPos = 8; 
-
-            if (рандомИИ > 0.35 && рандомИИ <= 0.70) {
-                шансИИ = 0.40;
-                finalPos = 25; 
-            } else if (рандомИИ > 0.70 && рандомИИ <= 0.90) {
-                шансИИ = 0.70;
-                finalPos = 40; 
-            } else if (рандомИИ > 0.90) {
-                шансИИ = 0.95;
-                finalPos = 50; 
-            }
-
-            arrow.style.left = finalPos + "%";
-            printLog(`🤖 Бот остановил стрелку на отметке ${finalPos}%!`);
-            выполнитьШлепок(шансИИ);
-        }
-    }, 15);
-}
-
-function завершитьМатч() {
-    document.getElementById('btn-start').disabled = false;
-    document.getElementById('btn-hit').disabled = true;
-    document.getElementById('btn-hit').innerText = "МАТЧ ОКОНЧЕН";
-    updateProfileData();
-}
-
-инициализацияКоллекции();
-</script>
-</body>
-</html>
+        if (!isAiming && !document.getElementById('btn-hit').disabled) {
+            arrowPosition += arrowDirection * 2;
+            if (arrowPosition >= 
